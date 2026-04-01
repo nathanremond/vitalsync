@@ -4,9 +4,14 @@ export default [
   eslintRecommended,
   {
     files: ["**/*.js"],
+    env: {
+      node: true,
+      es2023: true,
+      jest: true
+    },
     languageOptions: {
       ecmaVersion: "latest",
-      sourceType: "script",
+      sourceType: "module",
       globals: {
         jest: "readonly"
       }
