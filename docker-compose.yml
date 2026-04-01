@@ -1,0 +1,46 @@
+name: vitalsync
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: db-vitalsync
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - vitalsync-network
+
+  backend:
+    build:
+      context: ./backend
+    container_name: backend-vitalsync
+    image: backend-docker
+    environment:
+      DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+    networks:
+      - vitalsync-network
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: frontend-vitalsync
+    image: frontend-docker
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    networks:
+      - vitalsync-network
+
+volumes:
+  db_data:
+
+networks:
+  vitalsync-network:
+    driver: bridge
