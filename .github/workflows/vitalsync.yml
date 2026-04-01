@@ -1,0 +1,112 @@
+name: vitalsync CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+# Étape 1 : lint & tests
+jobs:
+  lint-test:
+    name: Lint & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install
+
+      - name: Run ESLint on backend sources
+        working-directory: backend
+        run: npm run lint
+
+      - name: Run backend unit tests
+        working-directory: backend
+        run: npm test
+
+# Étape 2 : construction et push des images Docker
+  build-and-push:
+    name: Build Docker images and push to GHCR
+    needs: lint-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/vitalsync-backend:${{ github.sha }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/vitalsync-frontend:${{ github.sha }}
+
+# Étape 3 : déploiement staging local via docker-compose + health-check backend
+  deploy-staging:
+    name: Deploy staging and health check
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy staging with docker-compose
+        run: docker compose up -d --build
+
+      - name: Wait for backend health endpoint
+        run: |
+          echo "Waiting for backend health check..."
+          for i in $(seq 1 10); do
+            if curl --fail http://localhost:3000/health; then
+              echo "Backend health check passed"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 3s..."
+            sleep 3
+          done
+          echo "Backend health check failed after 10 attempts"
+          exit 1
