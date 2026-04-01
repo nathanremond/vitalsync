@@ -1,0 +1,18 @@
+node_modules
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Configs et métadonnées d'IDE ou du système
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Git metadata inutile pour le build Docker
+.git
+
+.env
+.env.local
+.env.*.local
